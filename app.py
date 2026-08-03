@@ -35,7 +35,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 및 전처리
+# 2. 데이터 로드 및 전처리 (지오코딩 정밀도 향상)
 @st.cache_data(show_spinner=False)
 def load_and_preprocess_data():
     df = pd.read_excel('전국 환자경험평가 최종 결과2.xlsx')
@@ -46,25 +46,47 @@ def load_and_preprocess_data():
     for d in domains_list:
         df[f'{d}_상위%'] = df[d].rank(pct=True, ascending=False) * 100
         
-    cache_file = 'geocoded_hospitals.csv'
+    cache_file = 'geocoded_hospitals_v2.csv' # 캐시 파일명 변경으로 재검색 유도
     if os.path.exists(cache_file):
         cached_coords = pd.read_csv(cache_file)
         df = pd.merge(df, cached_coords[['병원명', 'Latitude', 'Longitude']], on='병원명', how='left')
     else:
-        geolocator = Nominatim(user_agent="px_map_app_kr_v5")
+        st.info("📍 지도 위치 정밀 조정 중입니다. (최초 1회만 약 2분 소요됩니다.)")
+        geolocator = Nominatim(user_agent="px_map_app_kr_v6")
         lats, lons = [], []
+        
         for idx, row in df.iterrows():
-            clean_addr = str(row['소재지']).split(',')[0].split('(')[0].strip()
-            try:
-                loc = geolocator.geocode(clean_addr, timeout=3)
-                if loc: lats.append(loc.latitude); lons.append(loc.longitude)
-                else: 
-                    loc2 = geolocator.geocode(" ".join(clean_addr.split(' ')[:2]), timeout=3)
-                    if loc2: lats.append(loc2.latitude); lons.append(loc2.longitude)
-                    else: lats.append(36.5); lons.append(127.5)
-            except: lats.append(36.5); lons.append(127.5)
+            raw_addr = str(row['소재지']).replace(',', ' ')
+            # 괄호 안의 내용(주로 동이름이나 건물명) 제거
+            clean_addr = " ".join([p for p in raw_addr.split() if '(' not in p and ')' not in p]).strip()
+            addr_parts = clean_addr.split()
+            
+            # 주소 인식 실패 시 단계별로 주소를 짧게 쳐서 재검색 (정밀도 향상 로직)
+            search_strategies = [
+                clean_addr, # 1. 원본 주소 (괄호 제거)
+                " ".join(addr_parts[:4]) if len(addr_parts) >= 4 else clean_addr, # 2. ~동/로 까지
+                " ".join(addr_parts[:3]) if len(addr_parts) >= 3 else clean_addr, # 3. ~구/군 까지
+                " ".join(addr_parts[:2]) if len(addr_parts) >= 2 else clean_addr  # 4. 시/도 단위
+            ]
+            
+            loc = None
+            for strategy in search_strategies:
+                try:
+                    loc = geolocator.geocode(strategy, timeout=3)
+                    if loc: break # 성공하면 즉시 중단
+                except: pass
+                time.sleep(0.1) # 서버 부하 방지
+                
+            if loc:
+                lats.append(loc.latitude)
+                lons.append(loc.longitude)
+            else:
+                lats.append(36.5)
+                lons.append(127.5)
+                
         df['Latitude'], df['Longitude'] = lats, lons
         df[['병원명', 'Latitude', 'Longitude']].to_csv(cache_file, index=False)
+        st.rerun() # 캐시 생성 후 화면 즉시 갱신
     
     return df, domains_list
 
@@ -88,7 +110,6 @@ st.sidebar.markdown("---")
 st.sidebar.header("🏥 심층 분석 병원 선택")
 st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 이곳에서 검색하여 분석 그룹에 추가하세요.")
 
-# 지도 연동 기능을 삭제하여 가장 안정적인 기본 다중 선택 위젯으로 원복
 selected_hospitals = st.sidebar.multiselect(
     "비교할 병원들을 선택하세요", 
     options=df['병원명'].sort_values().tolist(),
@@ -126,6 +147,7 @@ with tab1:
     map_center = [filtered_df['Latitude'].mean(), filtered_df['Longitude'].mean()] if not filtered_df.empty and filtered_df['Latitude'].mean() != 36.5 else [36.2, 127.8]
     m = folium.Map(location=map_center, zoom_start=7, tiles="OpenStreetMap")
     
+    # 혹시라도 변환에 실패한 극소수 병원을 위한 폴백(Fallback) 안전장치
     region_fallback = {
         '서울특별시': [37.5665, 126.9780], '부산광역시': [35.1796, 129.0756], '대구광역시': [35.8714, 128.6014],
         '인천광역시': [37.4563, 126.7052], '광주광역시': [35.1595, 126.8526], '전남광주통합특별시': [35.1595, 126.8526],
@@ -168,7 +190,6 @@ with tab1:
             icon=folium.Icon(color=color, icon='info-sign')
         ).add_to(m)
 
-    # 지도가 클릭 신호를 서버로 보내지 않도록 설정하여(returned_objects=[]) 불필요한 새로고침 완전 차단
     st_folium(m, width="100%", height=500, returned_objects=[], key="px_main_map")
     
     st.markdown("""
@@ -224,7 +245,8 @@ with tab2:
                 st.markdown(html_content, unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown("#### 3. 병원별 강점/약점 분석")
+        # 번호 '3.'을 제거하고 명칭 변경 반영
+        st.markdown("#### 병원별 강점/약점 분석")
         sw_cols = st.columns(len(compare_df) if len(compare_df) <= 3 else 3)
         
         for i, (idx, row) in enumerate(compare_df.iterrows()):
