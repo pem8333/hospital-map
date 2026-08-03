@@ -111,7 +111,7 @@ st.sidebar.markdown("""
 
 # 4. 메인 화면
 try:
-    st.image("서비스 배너.PNG", use_container_width=True)
+    st.image("banner.png", use_container_width=True)
 except: pass
 
 st.title("대한민국 환자경험 지도(PX Map)")
