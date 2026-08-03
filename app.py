@@ -131,9 +131,7 @@ st.sidebar.markdown("""
 """)
 
 # 4. 메인 화면
-try:
-    st.image("banner.png", use_container_width=True)
-except: pass
+st.image("banner.png", use_container_width=True)
 
 st.title("대한민국 환자경험 지도(PX Map)")
 st.markdown("##### 건강보험심사평가원 '환자경험평가' 데이터를 기반으로 쉽고 빠르게 병원을 비교할 수 있습니다.")
