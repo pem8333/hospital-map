@@ -10,7 +10,7 @@ import math
 import random
 
 # 1. 웹페이지 기본 설정
-st.set_page_config(page_title="환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
 
 # --- CSS 스타일링 ---
 st.markdown("""
@@ -118,7 +118,7 @@ if os.path.exists("banner.png"):
 elif os.path.exists("서비스 배너.PNG"):
     st.image("서비스 배너.PNG", use_container_width=True)
 
-st.title("환자경험 지도(PX Map)")
+st.title("전국 환자경험 지도(PX Map)")
 st.markdown("##### 건강보험심사평가원 '환자경험평가' 데이터를 기반으로 쉽고 빠르게 병원을 비교할 수 있습니다.")
 
 tab1, tab2 = st.tabs(["대한민국 환자경험 지도", "심층 분석 대시보드"])
