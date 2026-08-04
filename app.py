@@ -176,7 +176,7 @@ with tab1:
     
     st.markdown("""
     <div style="text-align:center; padding:10px; background-color:#F8FAFC; border-radius:5px; margin-bottom:5px; border:1px solid #E2E8F0;">
-        <b>마커 등급 안내:</b> 
+        <b>등급 표기 안내:</b> 
         <span style="color:#1D4ED8; font-weight:bold; margin:0 15px;">🔵 1등급</span>
         <span style="color:#059669; font-weight:bold; margin:0 15px;">🟢 2등급</span>
         <span style="color:#EA580C; font-weight:bold; margin:0 15px;">🟠 3~5등급</span>
