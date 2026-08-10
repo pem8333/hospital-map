@@ -9,6 +9,11 @@ import random
 # 1. 웹페이지 기본 설정
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
 
+# --- 세션 상태(Session State) 초기화 ---
+# 클릭 한 번으로 비교 그룹을 통째로 덮어쓰기 위한 저장 공간 생성
+if 'compare_list' not in st.session_state:
+    st.session_state.compare_list = []
+
 # --- CSS 스타일링 ---
 st.markdown("""
     <style>
@@ -45,16 +50,13 @@ def load_and_preprocess_data():
         
     cache_file = 'geocoded_hospitals.csv'
     
-    # 추출 과정 삭제 및 보유한 CSV 파일 즉시 병합
     if os.path.exists(cache_file):
         cached_coords = pd.read_csv(cache_file)
-        # 일직선 오류 방지: 문자열로 인식된 좌표를 숫자로 강제 변환
         cached_coords['Latitude'] = pd.to_numeric(cached_coords['Latitude'], errors='coerce')
         cached_coords['Longitude'] = pd.to_numeric(cached_coords['Longitude'], errors='coerce')
         
         df = pd.merge(df, cached_coords[['병원명', 'Latitude', 'Longitude']], on='병원명', how='left')
         
-        # 병합 후 빈 값이 있을 경우 대한민국 중심 좌표로 임시 대체
         df['Latitude'] = df['Latitude'].fillna(36.5)
         df['Longitude'] = df['Longitude'].fillna(127.5)
     else:
@@ -79,14 +81,27 @@ if selected_region: filtered_df = filtered_df[filtered_df['지역'].isin(selecte
 if selected_type: filtered_df = filtered_df[filtered_df['구분'].isin(selected_type)]
 if selected_grade: filtered_df = filtered_df[filtered_df['평가등급'].isin(selected_grade)]
 
+# [신규 기능] 필터링된 병원을 세션에 한 번에 담는 버튼 함수
+def add_filtered_hospitals():
+    if len(filtered_df) > 10:
+        st.sidebar.error("비교할 병원이 너무 많습니다! (최대 10개 권장). 필터를 통해 병원 수를 더 줄여주세요.")
+    else:
+        st.session_state.compare_list = filtered_df['병원명'].tolist()
+
 st.sidebar.markdown("---")
 st.sidebar.header("🏥 심층 분석 병원 선택")
-st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 이곳에서 검색하여 분석 그룹에 추가하세요.")
+st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 검색하거나, 아래 버튼을 눌러 지도에 남은 병원들을 한 번에 추가하세요.")
 
+# [신규 기능] 지도에 표시된 병원 비교하기 버튼 추가
+if st.sidebar.button("🗺️ 지도에 표시된 병원 비교하기", on_click=add_filtered_hospitals, use_container_width=True):
+    pass # 실제 동작은 위의 on_click 콜백(add_filtered_hospitals)에서 처리됨
+
+# 세션 상태(session_state)를 연동하여 다중 선택 박스 구성
 selected_hospitals = st.sidebar.multiselect(
     "비교할 병원들을 선택하세요", 
     options=df['병원명'].sort_values().tolist(),
-    default=[]
+    default=st.session_state.compare_list,
+    key="compare_list" # 사용자가 직접 지우거나 추가해도 session_state가 동기화됨
 )
 
 if selected_hospitals:
