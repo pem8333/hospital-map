@@ -6,8 +6,7 @@ from streamlit_folium import st_folium
 import os
 import random
 import json
-from datetime import datetime
-import pytz
+from datetime import datetime, timedelta, timezone
 
 # 1. 웹페이지 기본 설정
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
@@ -48,11 +47,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 방문자 수 관리 함수 ---
+# --- 방문자 수 관리 함수 (에러 수정됨: 파이썬 기본 모듈 사용) ---
 def manage_visitor_count(is_new_visit):
     visitor_file = "visitors.json"
-    tz = pytz.timezone('Asia/Seoul')
-    today_date = datetime.now(tz).strftime('%Y-%m-%d')
+    
+    # 한국 시간(KST) 설정 (UTC + 9시간)
+    KST = timezone(timedelta(hours=9))
+    today_date = datetime.now(KST).strftime('%Y-%m-%d')
     
     data = {"date": today_date, "today": 0, "total": 0}
     
@@ -153,7 +154,7 @@ st.sidebar.markdown("""
 - [관련 언론 보도 보기](https://www.google.com/search?q=%ED%99%98%EC%9E%90%EA%B2%BD%ED%97%98%ED%8F%89%EA%B0%80&tbm=nws)
 """)
 
-# [수정] 유용한 정보 바로 밑에 방문자 통계 위젯 배치
+# 유용한 정보 바로 밑에 방문자 통계 위젯 배치
 st.sidebar.markdown(f"""
 <div class='visitor-card'>
     <div style='display: flex; justify-content: space-around;'>
