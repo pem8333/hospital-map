@@ -3,10 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import folium
 from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim
-import time
 import os
-import math
 import random
 
 # 1. 웹페이지 기본 설정
@@ -35,7 +32,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 및 전처리 (지능형 정밀 지오코딩 + 진행바 추가)
+# 2. 데이터 로드 및 전처리 (수동 수집 CSV 전용)
 @st.cache_data(show_spinner=False)
 def load_and_preprocess_data():
     df = pd.read_excel('전국 환자경험평가 최종 결과2.xlsx')
@@ -46,61 +43,23 @@ def load_and_preprocess_data():
     for d in domains_list:
         df[f'{d}_상위%'] = df[d].rank(pct=True, ascending=False) * 100
         
-    # 기존 오류 파일을 무시하기 위해 새로운 캐시 파일명 지정 (v4)
-    cache_file = 'geocoded_hospitals_v4.csv'
+    cache_file = 'geocoded_hospitals.csv'
+    
+    # 추출 과정 삭제 및 보유한 CSV 파일 즉시 병합
     if os.path.exists(cache_file):
         cached_coords = pd.read_csv(cache_file)
+        # 일직선 오류 방지: 문자열로 인식된 좌표를 숫자로 강제 변환
+        cached_coords['Latitude'] = pd.to_numeric(cached_coords['Latitude'], errors='coerce')
+        cached_coords['Longitude'] = pd.to_numeric(cached_coords['Longitude'], errors='coerce')
+        
         df = pd.merge(df, cached_coords[['병원명', 'Latitude', 'Longitude']], on='병원명', how='left')
+        
+        # 병합 후 빈 값이 있을 경우 대한민국 중심 좌표로 임시 대체
+        df['Latitude'] = df['Latitude'].fillna(36.5)
+        df['Longitude'] = df['Longitude'].fillna(127.5)
     else:
-        st.info("📍 중소 병원의 정밀 좌표를 추출하고 있습니다. 최초 1회만 약 2~3분 소요됩니다.")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # IP 차단 우회를 위한 무작위 에이전트 생성
-        user_agent_str = f"px_map_app_kr_{random.randint(10000,99999)}"
-        geolocator = Nominatim(user_agent=user_agent_str)
-        lats, lons = [], []
-        
-        total_hospitals = len(df)
-        for idx, row in df.iterrows():
-            raw_addr = str(row['소재지']).replace(',', ' ')
-            clean_addr = " ".join([p for p in raw_addr.split() if '(' not in p and ')' not in p]).strip()
-            addr_parts = clean_addr.split()
-            
-            # 주소를 4단계로 쪼개어 검색 실패 시 점진적으로 재검색 (오차 최소화)
-            search_strategies = []
-            search_strategies.append(clean_addr)
-            if len(addr_parts) >= 4: search_strategies.append(" ".join(addr_parts[:4]))
-            if len(addr_parts) >= 3: search_strategies.append(" ".join(addr_parts[:3]))
-            if len(addr_parts) >= 2: search_strategies.append(" ".join(addr_parts[:2]))
-            
-            loc = None
-            for strategy in search_strategies:
-                try:
-                    loc = geolocator.geocode(strategy, timeout=2)
-                    if loc: break
-                except: pass
-                time.sleep(0.3) # 서버 과부하 방지 휴식
-                
-            if loc:
-                lats.append(loc.latitude)
-                lons.append(loc.longitude)
-            else:
-                lats.append(36.5)
-                lons.append(127.5)
-                
-            # 화면에 진행 상태 표시
-            progress_bar.progress((idx + 1) / total_hospitals)
-            status_text.text(f"좌표 변환 중... ({idx + 1}/{total_hospitals}) : {row['병원명']}")
-                
-        df['Latitude'], df['Longitude'] = lats, lons
-        try:
-            df[['병원명', 'Latitude', 'Longitude']].to_csv(cache_file, index=False)
-        except: pass
-        
-        progress_bar.empty()
-        status_text.empty()
-        st.rerun() # 작업 완료 후 화면 즉시 새로고침
+        st.error(f"🚨 '{cache_file}' 파일이 폴더에 없습니다! 수동으로 수집하신 CSV 파일을 업로드해 주세요.")
+        st.stop()
     
     return df, domains_list
 
@@ -186,7 +145,6 @@ with tab1:
         elif '2등급' in grade_str: color = 'green'
         else: color = 'orange'
             
-        # [복구 완료] 심평원 상세보기 링크 버튼 적용
         detail_link = row['상세보기 링크'] if '상세보기 링크' in row and pd.notna(row['상세보기 링크']) else ""
         link_html = f"<br><a href='{detail_link}' target='_blank' style='display:inline-block; margin-top:8px; padding:5px 10px; background:#1D4ED8; color:white; text-decoration:none; border-radius:5px;'>🔍 심평원 상세보기</a>" if detail_link else ""
         
@@ -224,7 +182,6 @@ with tab1:
     st.markdown("##### 💡 조건 필터 결과 리스트")
     if filtered_df.empty: st.warning("선택하신 조건에 일치하는 병원이 없습니다.")
     else:
-        # 상세보기 링크 등 지저분한 열은 숨기고 필요한 열만 표에 출력
         display_cols = ['순위', '병원명', '구분', '평가등급', '종합점수', '소재지', '전화번호']
         display_df = filtered_df[display_cols].copy()
         display_df['종합점수'] = display_df['종합점수'].apply(lambda x: f"{x:.2f}")
