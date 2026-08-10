@@ -95,7 +95,7 @@ if selected_hospitals:
         st.sidebar.markdown(f"✅ {h}")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 유용한 정보")
+st.sidebar.markdown("### 💡 유용한 정보")
 st.sidebar.markdown("""
 - [환자경험평가란? (유튜브)](https://www.youtube.com/watch?v=1b88aaD1MM8)
 - [평가 결과 안내문 (심평원)](https://www.hira.or.kr/ra/eval/asmInfo.do?evlCd=30&pgmid=HIRAA030004000000)
