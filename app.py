@@ -10,7 +10,6 @@ import random
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
 
 # --- 세션 상태(Session State) 초기화 ---
-# 클릭 한 번으로 비교 그룹을 통째로 덮어쓰기 위한 저장 공간 생성
 if 'compare_list' not in st.session_state:
     st.session_state.compare_list = []
 
@@ -81,28 +80,25 @@ if selected_region: filtered_df = filtered_df[filtered_df['지역'].isin(selecte
 if selected_type: filtered_df = filtered_df[filtered_df['구분'].isin(selected_type)]
 if selected_grade: filtered_df = filtered_df[filtered_df['평가등급'].isin(selected_grade)]
 
-# [신규 기능] 필터링된 병원을 세션에 한 번에 담는 버튼 함수
+# [수정] 제한 없이 필터링된 모든 병원을 세션에 담는 함수
 def add_filtered_hospitals():
-    if len(filtered_df) > 10:
-        st.sidebar.error("비교할 병원이 너무 많습니다! (최대 10개 권장). 필터를 통해 병원 수를 더 줄여주세요.")
-    else:
-        st.session_state.compare_list = filtered_df['병원명'].tolist()
+    st.session_state.compare_list = filtered_df['병원명'].tolist()
 
 st.sidebar.markdown("---")
 st.sidebar.header("🏥 심층 분석 병원 선택")
 st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 검색하거나, 아래 버튼을 눌러 지도에 남은 병원들을 한 번에 추가하세요.")
 
-# [신규 기능] 지도에 표시된 병원 비교하기 버튼 추가
-if st.sidebar.button("🗺️ 지도에 표시된 병원 비교하기", on_click=add_filtered_hospitals, use_container_width=True):
-    pass # 실제 동작은 위의 on_click 콜백(add_filtered_hospitals)에서 처리됨
-
-# 세션 상태(session_state)를 연동하여 다중 선택 박스 구성
+# [수정] '비교할 병원들을 선택하세요' 다중 선택 박스를 위로 배치
 selected_hospitals = st.sidebar.multiselect(
     "비교할 병원들을 선택하세요", 
     options=df['병원명'].sort_values().tolist(),
     default=st.session_state.compare_list,
-    key="compare_list" # 사용자가 직접 지우거나 추가해도 session_state가 동기화됨
+    key="compare_list" 
 )
+
+# [수정] '지도에 표시된 병원 비교하기' 버튼을 아래로 배치
+if st.sidebar.button("🗺️ 지도에 표시된 병원 비교하기", on_click=add_filtered_hospitals, use_container_width=True):
+    pass 
 
 if selected_hospitals:
     st.sidebar.markdown("##### [선택된 비교 그룹]")
