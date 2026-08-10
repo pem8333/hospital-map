@@ -5,6 +5,9 @@ import folium
 from streamlit_folium import st_folium
 import os
 import random
+import json
+from datetime import datetime
+import pytz
 
 # 1. 웹페이지 기본 설정
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
@@ -12,6 +15,11 @@ st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout
 # --- 세션 상태(Session State) 초기화 ---
 if 'compare_list' not in st.session_state:
     st.session_state.compare_list = []
+if 'visited' not in st.session_state:
+    st.session_state.visited = True
+    is_new_visit = True
+else:
+    is_new_visit = False
 
 # --- CSS 스타일링 ---
 st.markdown("""
@@ -33,8 +41,42 @@ st.markdown("""
     .diff-plus { color: #059669; font-weight: bold; font-size: 14px; }
     .diff-same { color: #64748B; font-weight: bold; font-size: 14px; }
     .footer-text { font-size: 12px; color: #6B7280; text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E5E7EB; }
+    .visitor-card { background-color: #1E293B; padding: 15px; border-radius: 10px; color: white; text-align: center; margin-top: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .visitor-title { font-size: 14px; color: #94A3B8; margin-bottom: 5px; }
+    .visitor-count { font-size: 24px; font-weight: bold; color: #38BDF8; }
+    .visitor-count-total { font-size: 24px; font-weight: bold; color: #F8FAFC; }
     </style>
 """, unsafe_allow_html=True)
+
+# --- 방문자 수 관리 함수 ---
+def manage_visitor_count(is_new_visit):
+    visitor_file = "visitors.json"
+    tz = pytz.timezone('Asia/Seoul')
+    today_date = datetime.now(tz).strftime('%Y-%m-%d')
+    
+    data = {"date": today_date, "today": 0, "total": 0}
+    
+    if os.path.exists(visitor_file):
+        try:
+            with open(visitor_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except: pass
+        
+    if data.get("date") != today_date:
+        data["date"] = today_date
+        data["today"] = 0
+        
+    if is_new_visit:
+        data["today"] += 1
+        data["total"] += 1
+        try:
+            with open(visitor_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        except: pass
+        
+    return data["today"], data["total"]
+
+today_count, total_count = manage_visitor_count(is_new_visit)
 
 # 2. 데이터 로드 및 전처리 (수동 수집 CSV 전용)
 @st.cache_data(show_spinner=False)
@@ -80,7 +122,6 @@ if selected_region: filtered_df = filtered_df[filtered_df['지역'].isin(selecte
 if selected_type: filtered_df = filtered_df[filtered_df['구분'].isin(selected_type)]
 if selected_grade: filtered_df = filtered_df[filtered_df['평가등급'].isin(selected_grade)]
 
-# [수정] 제한 없이 필터링된 모든 병원을 세션에 담는 함수
 def add_filtered_hospitals():
     st.session_state.compare_list = filtered_df['병원명'].tolist()
 
@@ -88,7 +129,6 @@ st.sidebar.markdown("---")
 st.sidebar.header("🏥 심층 분석 병원 선택")
 st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 검색하거나, 아래 버튼을 눌러 지도에 남은 병원들을 한 번에 추가하세요.")
 
-# [수정] '비교할 병원들을 선택하세요' 다중 선택 박스를 위로 배치
 selected_hospitals = st.sidebar.multiselect(
     "비교할 병원들을 선택하세요", 
     options=df['병원명'].sort_values().tolist(),
@@ -96,7 +136,6 @@ selected_hospitals = st.sidebar.multiselect(
     key="compare_list" 
 )
 
-# [수정] '지도에 표시된 병원 비교하기' 버튼을 아래로 배치
 if st.sidebar.button("🗺️ 지도에 표시된 병원 비교하기", on_click=add_filtered_hospitals, use_container_width=True):
     pass 
 
@@ -113,6 +152,24 @@ st.sidebar.markdown("""
 - [심사평가원 직접 조회](https://www.hira.or.kr/ra/eval/getDiagEvlList.do?pgmid=HIRAA030004000100)
 - [관련 언론 보도 보기](https://www.google.com/search?q=%ED%99%98%EC%9E%90%EA%B2%BD%ED%97%98%ED%8F%89%EA%B0%80&tbm=nws)
 """)
+
+# [수정] 유용한 정보 바로 밑에 방문자 통계 위젯 배치
+st.sidebar.markdown(f"""
+<div class='visitor-card'>
+    <div style='display: flex; justify-content: space-around;'>
+        <div>
+            <div class='visitor-title'>오늘 방문자</div>
+            <div class='visitor-count'>{today_count:,} 명</div>
+        </div>
+        <div style='border-left: 1px solid #475569; margin: 0 10px;'></div>
+        <div>
+            <div class='visitor-title'>누적 방문자</div>
+            <div class='visitor-count-total'>{total_count:,} 명</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 
 # 4. 메인 화면
 try:
