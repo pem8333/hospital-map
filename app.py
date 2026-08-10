@@ -150,7 +150,7 @@ st.sidebar.markdown("""
 - [관련 언론 보도 보기](https://www.google.com/search?q=%ED%99%98%EC%9E%90%EA%B2%BD%ED%97%98%ED%8F%89%EA%B0%80&tbm=nws)
 """)
 
-# 구분선과 함께 방문자 통계 텍스트만 심플하게 배치
+# [수정] 구분선과 함께 방문자 통계 텍스트만 심플하게 배치
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📈 **방문자 통계** | 오늘: **{today_count:,}**명 / 누적: **{total_count:,}**명")
 
