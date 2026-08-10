@@ -11,12 +11,11 @@ from datetime import datetime, timedelta, timezone
 # 1. 웹페이지 기본 설정
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
 
-# --- 기본 메뉴 및 헤더 숨기기 ---
+# --- 기본 메뉴 및 헤더 숨기기 (수정됨) ---
 hide_menu_style = """
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
 """
 st.markdown(hide_menu_style, unsafe_allow_html=True)
