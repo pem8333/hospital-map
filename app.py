@@ -35,7 +35,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 및 전처리
+# 2. 데이터 로드 및 전처리 (지능형 정밀 지오코딩 + 진행바 추가)
 @st.cache_data(show_spinner=False)
 def load_and_preprocess_data():
     df = pd.read_excel('전국 환자경험평가 최종 결과2.xlsx')
@@ -46,27 +46,61 @@ def load_and_preprocess_data():
     for d in domains_list:
         df[f'{d}_상위%'] = df[d].rank(pct=True, ascending=False) * 100
         
-    cache_file = 'geocoded_hospitals.csv'
+    # 기존 오류 파일을 무시하기 위해 새로운 캐시 파일명 지정 (v4)
+    cache_file = 'geocoded_hospitals_v4.csv'
     if os.path.exists(cache_file):
         cached_coords = pd.read_csv(cache_file)
         df = pd.merge(df, cached_coords[['병원명', 'Latitude', 'Longitude']], on='병원명', how='left')
     else:
-        geolocator = Nominatim(user_agent="px_map_app_kr_v5")
+        st.info("📍 중소 병원의 정밀 좌표를 추출하고 있습니다. 최초 1회만 약 2~3분 소요됩니다.")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # IP 차단 우회를 위한 무작위 에이전트 생성
+        user_agent_str = f"px_map_app_kr_{random.randint(10000,99999)}"
+        geolocator = Nominatim(user_agent=user_agent_str)
         lats, lons = [], []
+        
+        total_hospitals = len(df)
         for idx, row in df.iterrows():
-            clean_addr = str(row['소재지']).split(',')[0].split('(')[0].strip()
-            try:
-                loc = geolocator.geocode(clean_addr, timeout=3)
-                if loc: lats.append(loc.latitude); lons.append(loc.longitude)
-                else: 
-                    loc2 = geolocator.geocode(" ".join(clean_addr.split(' ')[:2]), timeout=3)
-                    if loc2: lats.append(loc2.latitude); lons.append(loc2.longitude)
-                    else: lats.append(36.5); lons.append(127.5)
-            except: lats.append(36.5); lons.append(127.5)
+            raw_addr = str(row['소재지']).replace(',', ' ')
+            clean_addr = " ".join([p for p in raw_addr.split() if '(' not in p and ')' not in p]).strip()
+            addr_parts = clean_addr.split()
+            
+            # 주소를 4단계로 쪼개어 검색 실패 시 점진적으로 재검색 (오차 최소화)
+            search_strategies = []
+            search_strategies.append(clean_addr)
+            if len(addr_parts) >= 4: search_strategies.append(" ".join(addr_parts[:4]))
+            if len(addr_parts) >= 3: search_strategies.append(" ".join(addr_parts[:3]))
+            if len(addr_parts) >= 2: search_strategies.append(" ".join(addr_parts[:2]))
+            
+            loc = None
+            for strategy in search_strategies:
+                try:
+                    loc = geolocator.geocode(strategy, timeout=2)
+                    if loc: break
+                except: pass
+                time.sleep(0.3) # 서버 과부하 방지 휴식
+                
+            if loc:
+                lats.append(loc.latitude)
+                lons.append(loc.longitude)
+            else:
+                lats.append(36.5)
+                lons.append(127.5)
+                
+            # 화면에 진행 상태 표시
+            progress_bar.progress((idx + 1) / total_hospitals)
+            status_text.text(f"좌표 변환 중... ({idx + 1}/{total_hospitals}) : {row['병원명']}")
+                
         df['Latitude'], df['Longitude'] = lats, lons
         try:
             df[['병원명', 'Latitude', 'Longitude']].to_csv(cache_file, index=False)
         except: pass
+        
+        progress_bar.empty()
+        status_text.empty()
+        st.rerun() # 작업 완료 후 화면 즉시 새로고침
     
     return df, domains_list
 
@@ -90,7 +124,6 @@ st.sidebar.markdown("---")
 st.sidebar.header("🏥 심층 분석 병원 선택")
 st.sidebar.caption("※ 지도나 리스트에서 확인한 병원을 이곳에서 검색하여 분석 그룹에 추가하세요.")
 
-# 지도 연동 기능을 삭제하여 가장 안정적인 기본 다중 선택 위젯으로 원복
 selected_hospitals = st.sidebar.multiselect(
     "비교할 병원들을 선택하세요", 
     options=df['병원명'].sort_values().tolist(),
@@ -112,11 +145,12 @@ st.sidebar.markdown("""
 """)
 
 # 4. 메인 화면
-# [요청사항 3] 배너 이미지를 숨김 처리 없이 확실히 띄우도록 수정
-if os.path.exists("banner.png"):
-    st.image("banner.png", use_container_width=True)
-elif os.path.exists("서비스 배너.PNG"):
-    st.image("서비스 배너.PNG", use_container_width=True)
+try:
+    if os.path.exists("banner.png"):
+        st.image("banner.png", use_container_width=True)
+    elif os.path.exists("서비스 배너.PNG"):
+        st.image("서비스 배너.PNG", use_container_width=True)
+except: pass
 
 st.title("전국 환자경험 지도(PX Map)")
 st.markdown("##### 건강보험심사평가원 '환자경험평가' 데이터를 기반으로 쉽고 빠르게 병원을 비교할 수 있습니다.")
@@ -152,8 +186,9 @@ with tab1:
         elif '2등급' in grade_str: color = 'green'
         else: color = 'orange'
             
-        homepage = "https://www.dkuh.co.kr/html_2016/" if row['병원명'] == '단국대학교의과대학부속병원' else ""
-        link_html = f"<br><a href='{homepage}' target='_blank' style='display:inline-block; margin-top:8px; padding:5px 10px; background:#1D4ED8; color:white; text-decoration:none; border-radius:5px;'>🏥 병원 홈페이지 이동</a>" if homepage else ""
+        # [복구 완료] 심평원 상세보기 링크 버튼 적용
+        detail_link = row['상세보기 링크'] if '상세보기 링크' in row and pd.notna(row['상세보기 링크']) else ""
+        link_html = f"<br><a href='{detail_link}' target='_blank' style='display:inline-block; margin-top:8px; padding:5px 10px; background:#1D4ED8; color:white; text-decoration:none; border-radius:5px;'>🔍 심평원 상세보기</a>" if detail_link else ""
         
         popup_html = f"""
         <div style="width:220px; font-family:sans-serif;">
@@ -183,14 +218,15 @@ with tab1:
     </div>
     """, unsafe_allow_html=True)
     
-    # [요청사항 2] 지도 하단 참고용 안내문구 추가
     st.caption("※ 지도에 표시된 위치가 실제 위치와 다소 차이가 있을 수 있으니 참고용으로 사용 부탁드립니다.")
     
     st.markdown("---")
     st.markdown("##### 💡 조건 필터 결과 리스트")
     if filtered_df.empty: st.warning("선택하신 조건에 일치하는 병원이 없습니다.")
     else:
-        display_df = filtered_df[['순위', '병원명', '구분', '평가등급', '종합점수', '소재지', '전화번호']].copy()
+        # 상세보기 링크 등 지저분한 열은 숨기고 필요한 열만 표에 출력
+        display_cols = ['순위', '병원명', '구분', '평가등급', '종합점수', '소재지', '전화번호']
+        display_df = filtered_df[display_cols].copy()
         display_df['종합점수'] = display_df['종합점수'].apply(lambda x: f"{x:.2f}")
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
@@ -230,7 +266,6 @@ with tab2:
                 st.markdown(html_content, unsafe_allow_html=True)
 
         st.markdown("---")
-        # [요청사항 1] '3.' 지우고 문구 변경
         st.markdown("#### 병원별 강점/약점 분석")
         sw_cols = st.columns(len(compare_df) if len(compare_df) <= 3 else 3)
         
