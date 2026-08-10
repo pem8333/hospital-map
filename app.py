@@ -11,6 +11,15 @@ from datetime import datetime, timedelta, timezone
 # 1. 웹페이지 기본 설정
 st.set_page_config(page_title="대한민국 환자경험 지도(PX Map)", layout="wide", initial_sidebar_state="expanded")
 
+# --- [안전한 메뉴 숨기기] 모바일 사이드바 버튼은 남기고 우측 상단 메뉴와 하단 로고만 숨김 ---
+hide_safe_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_safe_style, unsafe_allow_html=True)
+
 # --- 세션 상태(Session State) 초기화 ---
 if 'compare_list' not in st.session_state:
     st.session_state.compare_list = []
@@ -150,7 +159,7 @@ st.sidebar.markdown("""
 - [관련 언론 보도 보기](https://www.google.com/search?q=%ED%99%98%EC%9E%90%EA%B2%BD%ED%97%98%ED%8F%89%EA%B0%80&tbm=nws)
 """)
 
-# [수정] 구분선과 함께 방문자 통계 텍스트만 심플하게 배치
+# 구분선과 함께 방문자 통계 텍스트만 심플하게 배치
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📈 **방문자 통계** | 오늘: **{today_count:,}**명 / 누적: **{total_count:,}**명")
 
